@@ -1,20 +1,27 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
+	"github.com/blohny/config"
+	"github.com/blohny/controller"
 	error "github.com/blohny/helper"
-	"github.com/julienschmidt/httprouter"
+	"github.com/blohny/repository"
+	"github.com/blohny/router"
+	"github.com/blohny/service"
 )
 
 func main() {
 
-	routes := httprouter.New()
+	db := config.DatabaseConnection()
 
-	routes.GET("/", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		fmt.Fprint(w, "GOLANG")
-	})
+	bookRepository := repository.NewBookRepository(db)
+
+	bookService := service.NewBookServiceImpl(bookRepository)
+
+	bookController := controller.NewBookController(bookService)
+
+	routes := router.NewRouter(bookController)
 
 	server := http.Server{Addr: "localhost: 8888", Handler: routes}
 
