@@ -8,13 +8,31 @@ import (
 )
 
 var (
+	// TourProductsColumns holds the columns for the "tour_products" table.
+	TourProductsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "user_products", Type: field.TypeString, Nullable: true},
+	}
+	// TourProductsTable holds the schema information for the "tour_products" table.
+	TourProductsTable = &schema.Table{
+		Name:       "tour_products",
+		Columns:    TourProductsColumns,
+		PrimaryKey: []*schema.Column{TourProductsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "tour_products_use_rs_products",
+				Columns:    []*schema.Column{TourProductsColumns[2]},
+				RefColumns: []*schema.Column{UseRsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
 	// UseRsColumns holds the columns for the "use_rs" table.
 	UseRsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"mysql": "varchar(10)"}},
-		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"mysql": "varchar(20)"}},
-		{Name: "create_at", Type: field.TypeTime},
-		{Name: "update_at", Type: field.TypeTime},
+		{Name: "id", Type: field.TypeString},
+		{Name: "name", Type: field.TypeString},
+		{Name: "is_activated", Type: field.TypeBool, Default: true},
 	}
 	// UseRsTable holds the schema information for the "use_rs" table.
 	UseRsTable = &schema.Table{
@@ -24,9 +42,11 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		TourProductsTable,
 		UseRsTable,
 	}
 )
 
 func init() {
+	TourProductsTable.ForeignKeys[0].RefTable = UseRsTable
 }

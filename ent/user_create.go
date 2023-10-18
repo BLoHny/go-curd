@@ -6,10 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/blohny/ent/tourproduct"
 	"github.com/blohny/ent/user"
 )
 
@@ -26,38 +26,39 @@ func (uc *USERCreate) SetName(s string) *USERCreate {
 	return uc
 }
 
-// SetEmail sets the "email" field.
-func (uc *USERCreate) SetEmail(s string) *USERCreate {
-	uc.mutation.SetEmail(s)
+// SetIsActivated sets the "isActivated" field.
+func (uc *USERCreate) SetIsActivated(b bool) *USERCreate {
+	uc.mutation.SetIsActivated(b)
 	return uc
 }
 
-// SetCreateAt sets the "create_at" field.
-func (uc *USERCreate) SetCreateAt(t time.Time) *USERCreate {
-	uc.mutation.SetCreateAt(t)
-	return uc
-}
-
-// SetNillableCreateAt sets the "create_at" field if the given value is not nil.
-func (uc *USERCreate) SetNillableCreateAt(t *time.Time) *USERCreate {
-	if t != nil {
-		uc.SetCreateAt(*t)
+// SetNillableIsActivated sets the "isActivated" field if the given value is not nil.
+func (uc *USERCreate) SetNillableIsActivated(b *bool) *USERCreate {
+	if b != nil {
+		uc.SetIsActivated(*b)
 	}
 	return uc
 }
 
-// SetUpdateAt sets the "update_at" field.
-func (uc *USERCreate) SetUpdateAt(t time.Time) *USERCreate {
-	uc.mutation.SetUpdateAt(t)
+// SetID sets the "id" field.
+func (uc *USERCreate) SetID(s string) *USERCreate {
+	uc.mutation.SetID(s)
 	return uc
 }
 
-// SetNillableUpdateAt sets the "update_at" field if the given value is not nil.
-func (uc *USERCreate) SetNillableUpdateAt(t *time.Time) *USERCreate {
-	if t != nil {
-		uc.SetUpdateAt(*t)
-	}
+// AddProductIDs adds the "products" edge to the TourProduct entity by IDs.
+func (uc *USERCreate) AddProductIDs(ids ...int) *USERCreate {
+	uc.mutation.AddProductIDs(ids...)
 	return uc
+}
+
+// AddProducts adds the "products" edges to the TourProduct entity.
+func (uc *USERCreate) AddProducts(t ...*TourProduct) *USERCreate {
+	ids := make([]int, len(t))
+	for i := range t {
+		ids[i] = t[i].ID
+	}
+	return uc.AddProductIDs(ids...)
 }
 
 // Mutation returns the USERMutation object of the builder.
@@ -95,13 +96,9 @@ func (uc *USERCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (uc *USERCreate) defaults() {
-	if _, ok := uc.mutation.CreateAt(); !ok {
-		v := user.DefaultCreateAt()
-		uc.mutation.SetCreateAt(v)
-	}
-	if _, ok := uc.mutation.UpdateAt(); !ok {
-		v := user.DefaultUpdateAt()
-		uc.mutation.SetUpdateAt(v)
+	if _, ok := uc.mutation.IsActivated(); !ok {
+		v := user.DefaultIsActivated
+		uc.mutation.SetIsActivated(v)
 	}
 }
 
@@ -110,14 +107,8 @@ func (uc *USERCreate) check() error {
 	if _, ok := uc.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "USER.name"`)}
 	}
-	if _, ok := uc.mutation.Email(); !ok {
-		return &ValidationError{Name: "email", err: errors.New(`ent: missing required field "USER.email"`)}
-	}
-	if _, ok := uc.mutation.CreateAt(); !ok {
-		return &ValidationError{Name: "create_at", err: errors.New(`ent: missing required field "USER.create_at"`)}
-	}
-	if _, ok := uc.mutation.UpdateAt(); !ok {
-		return &ValidationError{Name: "update_at", err: errors.New(`ent: missing required field "USER.update_at"`)}
+	if _, ok := uc.mutation.IsActivated(); !ok {
+		return &ValidationError{Name: "isActivated", err: errors.New(`ent: missing required field "USER.isActivated"`)}
 	}
 	return nil
 }
@@ -133,8 +124,13 @@ func (uc *USERCreate) sqlSave(ctx context.Context) (*USER, error) {
 		}
 		return nil, err
 	}
-	id := _spec.ID.Value.(int64)
-	_node.ID = int(id)
+	if _spec.ID.Value != nil {
+		if id, ok := _spec.ID.Value.(string); ok {
+			_node.ID = id
+		} else {
+			return nil, fmt.Errorf("unexpected USER.ID type: %T", _spec.ID.Value)
+		}
+	}
 	uc.mutation.id = &_node.ID
 	uc.mutation.done = true
 	return _node, nil
@@ -143,23 +139,35 @@ func (uc *USERCreate) sqlSave(ctx context.Context) (*USER, error) {
 func (uc *USERCreate) createSpec() (*USER, *sqlgraph.CreateSpec) {
 	var (
 		_node = &USER{config: uc.config}
-		_spec = sqlgraph.NewCreateSpec(user.Table, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
+		_spec = sqlgraph.NewCreateSpec(user.Table, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	)
+	if id, ok := uc.mutation.ID(); ok {
+		_node.ID = id
+		_spec.ID.Value = id
+	}
 	if value, ok := uc.mutation.Name(); ok {
 		_spec.SetField(user.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if value, ok := uc.mutation.Email(); ok {
-		_spec.SetField(user.FieldEmail, field.TypeString, value)
-		_node.Email = value
+	if value, ok := uc.mutation.IsActivated(); ok {
+		_spec.SetField(user.FieldIsActivated, field.TypeBool, value)
+		_node.IsActivated = value
 	}
-	if value, ok := uc.mutation.CreateAt(); ok {
-		_spec.SetField(user.FieldCreateAt, field.TypeTime, value)
-		_node.CreateAt = value
-	}
-	if value, ok := uc.mutation.UpdateAt(); ok {
-		_spec.SetField(user.FieldUpdateAt, field.TypeTime, value)
-		_node.UpdateAt = value
+	if nodes := uc.mutation.ProductsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
@@ -209,10 +217,6 @@ func (ucb *USERCreateBulk) Save(ctx context.Context) ([]*USER, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
-				if specs[i].ID.Value != nil {
-					id := specs[i].ID.Value.(int64)
-					nodes[i].ID = int(id)
-				}
 				mutation.done = true
 				return nodes[i], nil
 			})

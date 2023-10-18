@@ -6,12 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/blohny/ent/predicate"
+	"github.com/blohny/ent/tourproduct"
 	"github.com/blohny/ent/user"
 )
 
@@ -34,30 +34,33 @@ func (uu *USERUpdate) SetName(s string) *USERUpdate {
 	return uu
 }
 
-// SetEmail sets the "email" field.
-func (uu *USERUpdate) SetEmail(s string) *USERUpdate {
-	uu.mutation.SetEmail(s)
+// SetIsActivated sets the "isActivated" field.
+func (uu *USERUpdate) SetIsActivated(b bool) *USERUpdate {
+	uu.mutation.SetIsActivated(b)
 	return uu
 }
 
-// SetCreateAt sets the "create_at" field.
-func (uu *USERUpdate) SetCreateAt(t time.Time) *USERUpdate {
-	uu.mutation.SetCreateAt(t)
-	return uu
-}
-
-// SetNillableCreateAt sets the "create_at" field if the given value is not nil.
-func (uu *USERUpdate) SetNillableCreateAt(t *time.Time) *USERUpdate {
-	if t != nil {
-		uu.SetCreateAt(*t)
+// SetNillableIsActivated sets the "isActivated" field if the given value is not nil.
+func (uu *USERUpdate) SetNillableIsActivated(b *bool) *USERUpdate {
+	if b != nil {
+		uu.SetIsActivated(*b)
 	}
 	return uu
 }
 
-// SetUpdateAt sets the "update_at" field.
-func (uu *USERUpdate) SetUpdateAt(t time.Time) *USERUpdate {
-	uu.mutation.SetUpdateAt(t)
+// AddProductIDs adds the "products" edge to the TourProduct entity by IDs.
+func (uu *USERUpdate) AddProductIDs(ids ...int) *USERUpdate {
+	uu.mutation.AddProductIDs(ids...)
 	return uu
+}
+
+// AddProducts adds the "products" edges to the TourProduct entity.
+func (uu *USERUpdate) AddProducts(t ...*TourProduct) *USERUpdate {
+	ids := make([]int, len(t))
+	for i := range t {
+		ids[i] = t[i].ID
+	}
+	return uu.AddProductIDs(ids...)
 }
 
 // Mutation returns the USERMutation object of the builder.
@@ -65,9 +68,29 @@ func (uu *USERUpdate) Mutation() *USERMutation {
 	return uu.mutation
 }
 
+// ClearProducts clears all "products" edges to the TourProduct entity.
+func (uu *USERUpdate) ClearProducts() *USERUpdate {
+	uu.mutation.ClearProducts()
+	return uu
+}
+
+// RemoveProductIDs removes the "products" edge to TourProduct entities by IDs.
+func (uu *USERUpdate) RemoveProductIDs(ids ...int) *USERUpdate {
+	uu.mutation.RemoveProductIDs(ids...)
+	return uu
+}
+
+// RemoveProducts removes "products" edges to TourProduct entities.
+func (uu *USERUpdate) RemoveProducts(t ...*TourProduct) *USERUpdate {
+	ids := make([]int, len(t))
+	for i := range t {
+		ids[i] = t[i].ID
+	}
+	return uu.RemoveProductIDs(ids...)
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (uu *USERUpdate) Save(ctx context.Context) (int, error) {
-	uu.defaults()
 	return withHooks(ctx, uu.sqlSave, uu.mutation, uu.hooks)
 }
 
@@ -93,16 +116,8 @@ func (uu *USERUpdate) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (uu *USERUpdate) defaults() {
-	if _, ok := uu.mutation.UpdateAt(); !ok {
-		v := user.UpdateDefaultUpdateAt()
-		uu.mutation.SetUpdateAt(v)
-	}
-}
-
 func (uu *USERUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
+	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	if ps := uu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -113,14 +128,53 @@ func (uu *USERUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := uu.mutation.Name(); ok {
 		_spec.SetField(user.FieldName, field.TypeString, value)
 	}
-	if value, ok := uu.mutation.Email(); ok {
-		_spec.SetField(user.FieldEmail, field.TypeString, value)
+	if value, ok := uu.mutation.IsActivated(); ok {
+		_spec.SetField(user.FieldIsActivated, field.TypeBool, value)
 	}
-	if value, ok := uu.mutation.CreateAt(); ok {
-		_spec.SetField(user.FieldCreateAt, field.TypeTime, value)
+	if uu.mutation.ProductsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := uu.mutation.UpdateAt(); ok {
-		_spec.SetField(user.FieldUpdateAt, field.TypeTime, value)
+	if nodes := uu.mutation.RemovedProductsIDs(); len(nodes) > 0 && !uu.mutation.ProductsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := uu.mutation.ProductsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, uu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -148,35 +202,59 @@ func (uuo *USERUpdateOne) SetName(s string) *USERUpdateOne {
 	return uuo
 }
 
-// SetEmail sets the "email" field.
-func (uuo *USERUpdateOne) SetEmail(s string) *USERUpdateOne {
-	uuo.mutation.SetEmail(s)
+// SetIsActivated sets the "isActivated" field.
+func (uuo *USERUpdateOne) SetIsActivated(b bool) *USERUpdateOne {
+	uuo.mutation.SetIsActivated(b)
 	return uuo
 }
 
-// SetCreateAt sets the "create_at" field.
-func (uuo *USERUpdateOne) SetCreateAt(t time.Time) *USERUpdateOne {
-	uuo.mutation.SetCreateAt(t)
-	return uuo
-}
-
-// SetNillableCreateAt sets the "create_at" field if the given value is not nil.
-func (uuo *USERUpdateOne) SetNillableCreateAt(t *time.Time) *USERUpdateOne {
-	if t != nil {
-		uuo.SetCreateAt(*t)
+// SetNillableIsActivated sets the "isActivated" field if the given value is not nil.
+func (uuo *USERUpdateOne) SetNillableIsActivated(b *bool) *USERUpdateOne {
+	if b != nil {
+		uuo.SetIsActivated(*b)
 	}
 	return uuo
 }
 
-// SetUpdateAt sets the "update_at" field.
-func (uuo *USERUpdateOne) SetUpdateAt(t time.Time) *USERUpdateOne {
-	uuo.mutation.SetUpdateAt(t)
+// AddProductIDs adds the "products" edge to the TourProduct entity by IDs.
+func (uuo *USERUpdateOne) AddProductIDs(ids ...int) *USERUpdateOne {
+	uuo.mutation.AddProductIDs(ids...)
 	return uuo
+}
+
+// AddProducts adds the "products" edges to the TourProduct entity.
+func (uuo *USERUpdateOne) AddProducts(t ...*TourProduct) *USERUpdateOne {
+	ids := make([]int, len(t))
+	for i := range t {
+		ids[i] = t[i].ID
+	}
+	return uuo.AddProductIDs(ids...)
 }
 
 // Mutation returns the USERMutation object of the builder.
 func (uuo *USERUpdateOne) Mutation() *USERMutation {
 	return uuo.mutation
+}
+
+// ClearProducts clears all "products" edges to the TourProduct entity.
+func (uuo *USERUpdateOne) ClearProducts() *USERUpdateOne {
+	uuo.mutation.ClearProducts()
+	return uuo
+}
+
+// RemoveProductIDs removes the "products" edge to TourProduct entities by IDs.
+func (uuo *USERUpdateOne) RemoveProductIDs(ids ...int) *USERUpdateOne {
+	uuo.mutation.RemoveProductIDs(ids...)
+	return uuo
+}
+
+// RemoveProducts removes "products" edges to TourProduct entities.
+func (uuo *USERUpdateOne) RemoveProducts(t ...*TourProduct) *USERUpdateOne {
+	ids := make([]int, len(t))
+	for i := range t {
+		ids[i] = t[i].ID
+	}
+	return uuo.RemoveProductIDs(ids...)
 }
 
 // Where appends a list predicates to the USERUpdate builder.
@@ -194,7 +272,6 @@ func (uuo *USERUpdateOne) Select(field string, fields ...string) *USERUpdateOne 
 
 // Save executes the query and returns the updated USER entity.
 func (uuo *USERUpdateOne) Save(ctx context.Context) (*USER, error) {
-	uuo.defaults()
 	return withHooks(ctx, uuo.sqlSave, uuo.mutation, uuo.hooks)
 }
 
@@ -220,16 +297,8 @@ func (uuo *USERUpdateOne) ExecX(ctx context.Context) {
 	}
 }
 
-// defaults sets the default values of the builder before save.
-func (uuo *USERUpdateOne) defaults() {
-	if _, ok := uuo.mutation.UpdateAt(); !ok {
-		v := user.UpdateDefaultUpdateAt()
-		uuo.mutation.SetUpdateAt(v)
-	}
-}
-
 func (uuo *USERUpdateOne) sqlSave(ctx context.Context) (_node *USER, err error) {
-	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
+	_spec := sqlgraph.NewUpdateSpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	id, ok := uuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "USER.id" for update`)}
@@ -257,14 +326,53 @@ func (uuo *USERUpdateOne) sqlSave(ctx context.Context) (_node *USER, err error) 
 	if value, ok := uuo.mutation.Name(); ok {
 		_spec.SetField(user.FieldName, field.TypeString, value)
 	}
-	if value, ok := uuo.mutation.Email(); ok {
-		_spec.SetField(user.FieldEmail, field.TypeString, value)
+	if value, ok := uuo.mutation.IsActivated(); ok {
+		_spec.SetField(user.FieldIsActivated, field.TypeBool, value)
 	}
-	if value, ok := uuo.mutation.CreateAt(); ok {
-		_spec.SetField(user.FieldCreateAt, field.TypeTime, value)
+	if uuo.mutation.ProductsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
-	if value, ok := uuo.mutation.UpdateAt(); ok {
-		_spec.SetField(user.FieldUpdateAt, field.TypeTime, value)
+	if nodes := uuo.mutation.RemovedProductsIDs(); len(nodes) > 0 && !uuo.mutation.ProductsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := uuo.mutation.ProductsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ProductsTable,
+			Columns: []string{user.ProductsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(tourproduct.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &USER{config: uuo.config}
 	_spec.Assign = _node.assignValues

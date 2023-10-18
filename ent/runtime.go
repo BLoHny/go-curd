@@ -3,8 +3,6 @@
 package ent
 
 import (
-	"time"
-
 	"github.com/blohny/ent/schema"
 	"github.com/blohny/ent/user"
 )
@@ -15,14 +13,8 @@ import (
 func init() {
 	userFields := schema.USER{}.Fields()
 	_ = userFields
-	// userDescCreateAt is the schema descriptor for create_at field.
-	userDescCreateAt := userFields[2].Descriptor()
-	// user.DefaultCreateAt holds the default value on creation for the create_at field.
-	user.DefaultCreateAt = userDescCreateAt.Default.(func() time.Time)
-	// userDescUpdateAt is the schema descriptor for update_at field.
-	userDescUpdateAt := userFields[3].Descriptor()
-	// user.DefaultUpdateAt holds the default value on creation for the update_at field.
-	user.DefaultUpdateAt = userDescUpdateAt.Default.(func() time.Time)
-	// user.UpdateDefaultUpdateAt holds the default value on update for the update_at field.
-	user.UpdateDefaultUpdateAt = userDescUpdateAt.UpdateDefault.(func() time.Time)
+	// userDescIsActivated is the schema descriptor for isActivated field.
+	userDescIsActivated := userFields[2].Descriptor()
+	// user.DefaultIsActivated holds the default value on creation for the isActivated field.
+	user.DefaultIsActivated = userDescIsActivated.Default.(bool)
 }

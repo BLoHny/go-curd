@@ -9,6 +9,18 @@ import (
 	"github.com/blohny/ent"
 )
 
+// The TourProductFunc type is an adapter to allow the use of ordinary
+// function as TourProduct mutator.
+type TourProductFunc func(context.Context, *ent.TourProductMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TourProductFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TourProductMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TourProductMutation", m)
+}
+
 // The USERFunc type is an adapter to allow the use of ordinary
 // function as USER mutator.
 type USERFunc func(context.Context, *ent.USERMutation) (ent.Value, error)

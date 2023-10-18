@@ -5,7 +5,6 @@ package ent
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -16,16 +15,33 @@ import (
 type USER struct {
 	config `json:"-"`
 	// ID of the ent.
-	ID int `json:"id,omitempty"`
+	ID string `json:"id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
-	// Email holds the value of the "email" field.
-	Email string `json:"email,omitempty"`
-	// CreateAt holds the value of the "create_at" field.
-	CreateAt time.Time `json:"create_at,omitempty"`
-	// UpdateAt holds the value of the "update_at" field.
-	UpdateAt     time.Time `json:"update_at,omitempty"`
+	// IsActivated holds the value of the "isActivated" field.
+	IsActivated bool `json:"isActivated,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the USERQuery when eager-loading is set.
+	Edges        USEREdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// USEREdges holds the relations/edges for other nodes in the graph.
+type USEREdges struct {
+	// Products holds the value of the products edge.
+	Products []*TourProduct `json:"products,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// ProductsOrErr returns the Products value or an error if the edge
+// was not loaded in eager-loading.
+func (e USEREdges) ProductsOrErr() ([]*TourProduct, error) {
+	if e.loadedTypes[0] {
+		return e.Products, nil
+	}
+	return nil, &NotLoadedError{edge: "products"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -33,12 +49,10 @@ func (*USER) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldID:
-			values[i] = new(sql.NullInt64)
-		case user.FieldName, user.FieldEmail:
+		case user.FieldIsActivated:
+			values[i] = new(sql.NullBool)
+		case user.FieldID, user.FieldName:
 			values[i] = new(sql.NullString)
-		case user.FieldCreateAt, user.FieldUpdateAt:
-			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -55,34 +69,22 @@ func (u *USER) assignValues(columns []string, values []any) error {
 	for i := range columns {
 		switch columns[i] {
 		case user.FieldID:
-			value, ok := values[i].(*sql.NullInt64)
-			if !ok {
-				return fmt.Errorf("unexpected type %T for field id", value)
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field id", values[i])
+			} else if value.Valid {
+				u.ID = value.String
 			}
-			u.ID = int(value.Int64)
 		case user.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				u.Name = value.String
 			}
-		case user.FieldEmail:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field email", values[i])
+		case user.FieldIsActivated:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field isActivated", values[i])
 			} else if value.Valid {
-				u.Email = value.String
-			}
-		case user.FieldCreateAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field create_at", values[i])
-			} else if value.Valid {
-				u.CreateAt = value.Time
-			}
-		case user.FieldUpdateAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field update_at", values[i])
-			} else if value.Valid {
-				u.UpdateAt = value.Time
+				u.IsActivated = value.Bool
 			}
 		default:
 			u.selectValues.Set(columns[i], values[i])
@@ -95,6 +97,11 @@ func (u *USER) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (u *USER) Value(name string) (ent.Value, error) {
 	return u.selectValues.Get(name)
+}
+
+// QueryProducts queries the "products" edge of the USER entity.
+func (u *USER) QueryProducts() *TourProductQuery {
+	return NewUSERClient(u.config).QueryProducts(u)
 }
 
 // Update returns a builder for updating this USER.
@@ -123,14 +130,8 @@ func (u *USER) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(u.Name)
 	builder.WriteString(", ")
-	builder.WriteString("email=")
-	builder.WriteString(u.Email)
-	builder.WriteString(", ")
-	builder.WriteString("create_at=")
-	builder.WriteString(u.CreateAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("update_at=")
-	builder.WriteString(u.UpdateAt.Format(time.ANSIC))
+	builder.WriteString("isActivated=")
+	builder.WriteString(fmt.Sprintf("%v", u.IsActivated))
 	builder.WriteByte(')')
 	return builder.String()
 }

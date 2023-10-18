@@ -3,9 +3,8 @@
 package user
 
 import (
-	"time"
-
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -15,23 +14,26 @@ const (
 	FieldID = "id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldEmail holds the string denoting the email field in the database.
-	FieldEmail = "email"
-	// FieldCreateAt holds the string denoting the create_at field in the database.
-	FieldCreateAt = "create_at"
-	// FieldUpdateAt holds the string denoting the update_at field in the database.
-	FieldUpdateAt = "update_at"
+	// FieldIsActivated holds the string denoting the isactivated field in the database.
+	FieldIsActivated = "is_activated"
+	// EdgeProducts holds the string denoting the products edge name in mutations.
+	EdgeProducts = "products"
 	// Table holds the table name of the user in the database.
 	Table = "use_rs"
+	// ProductsTable is the table that holds the products relation/edge.
+	ProductsTable = "tour_products"
+	// ProductsInverseTable is the table name for the TourProduct entity.
+	// It exists in this package in order to avoid circular dependency with the "tourproduct" package.
+	ProductsInverseTable = "tour_products"
+	// ProductsColumn is the table column denoting the products relation/edge.
+	ProductsColumn = "user_products"
 )
 
 // Columns holds all SQL columns for user fields.
 var Columns = []string{
 	FieldID,
 	FieldName,
-	FieldEmail,
-	FieldCreateAt,
-	FieldUpdateAt,
+	FieldIsActivated,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -45,12 +47,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// DefaultCreateAt holds the default value on creation for the "create_at" field.
-	DefaultCreateAt func() time.Time
-	// DefaultUpdateAt holds the default value on creation for the "update_at" field.
-	DefaultUpdateAt func() time.Time
-	// UpdateDefaultUpdateAt holds the default value on update for the "update_at" field.
-	UpdateDefaultUpdateAt func() time.Time
+	// DefaultIsActivated holds the default value on creation for the "isActivated" field.
+	DefaultIsActivated bool
 )
 
 // OrderOption defines the ordering options for the USER queries.
@@ -66,17 +64,28 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
-// ByEmail orders the results by the email field.
-func ByEmail(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+// ByIsActivated orders the results by the isActivated field.
+func ByIsActivated(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIsActivated, opts...).ToFunc()
 }
 
-// ByCreateAt orders the results by the create_at field.
-func ByCreateAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreateAt, opts...).ToFunc()
+// ByProductsCount orders the results by products count.
+func ByProductsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newProductsStep(), opts...)
+	}
 }
 
-// ByUpdateAt orders the results by the update_at field.
-func ByUpdateAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldUpdateAt, opts...).ToFunc()
+// ByProducts orders the results by products terms.
+func ByProducts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newProductsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newProductsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ProductsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ProductsTable, ProductsColumn),
+	)
 }

@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,16 +12,18 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/blohny/ent/predicate"
+	"github.com/blohny/ent/tourproduct"
 	"github.com/blohny/ent/user"
 )
 
 // USERQuery is the builder for querying USER entities.
 type USERQuery struct {
 	config
-	ctx        *QueryContext
-	order      []user.OrderOption
-	inters     []Interceptor
-	predicates []predicate.USER
+	ctx          *QueryContext
+	order        []user.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.USER
+	withProducts *TourProductQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -57,6 +60,28 @@ func (uq *USERQuery) Order(o ...user.OrderOption) *USERQuery {
 	return uq
 }
 
+// QueryProducts chains the current query on the "products" edge.
+func (uq *USERQuery) QueryProducts() *TourProductQuery {
+	query := (&TourProductClient{config: uq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := uq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := uq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(tourproduct.Table, tourproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ProductsTable, user.ProductsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(uq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first USER entity from the query.
 // Returns a *NotFoundError when no USER was found.
 func (uq *USERQuery) First(ctx context.Context) (*USER, error) {
@@ -81,8 +106,8 @@ func (uq *USERQuery) FirstX(ctx context.Context) *USER {
 
 // FirstID returns the first USER ID from the query.
 // Returns a *NotFoundError when no USER ID was found.
-func (uq *USERQuery) FirstID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (uq *USERQuery) FirstID(ctx context.Context) (id string, err error) {
+	var ids []string
 	if ids, err = uq.Limit(1).IDs(setContextOp(ctx, uq.ctx, "FirstID")); err != nil {
 		return
 	}
@@ -94,7 +119,7 @@ func (uq *USERQuery) FirstID(ctx context.Context) (id int, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (uq *USERQuery) FirstIDX(ctx context.Context) int {
+func (uq *USERQuery) FirstIDX(ctx context.Context) string {
 	id, err := uq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -132,8 +157,8 @@ func (uq *USERQuery) OnlyX(ctx context.Context) *USER {
 // OnlyID is like Only, but returns the only USER ID in the query.
 // Returns a *NotSingularError when more than one USER ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (uq *USERQuery) OnlyID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (uq *USERQuery) OnlyID(ctx context.Context) (id string, err error) {
+	var ids []string
 	if ids, err = uq.Limit(2).IDs(setContextOp(ctx, uq.ctx, "OnlyID")); err != nil {
 		return
 	}
@@ -149,7 +174,7 @@ func (uq *USERQuery) OnlyID(ctx context.Context) (id int, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (uq *USERQuery) OnlyIDX(ctx context.Context) int {
+func (uq *USERQuery) OnlyIDX(ctx context.Context) string {
 	id, err := uq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -177,7 +202,7 @@ func (uq *USERQuery) AllX(ctx context.Context) []*USER {
 }
 
 // IDs executes the query and returns a list of USER IDs.
-func (uq *USERQuery) IDs(ctx context.Context) (ids []int, err error) {
+func (uq *USERQuery) IDs(ctx context.Context) (ids []string, err error) {
 	if uq.ctx.Unique == nil && uq.path != nil {
 		uq.Unique(true)
 	}
@@ -189,7 +214,7 @@ func (uq *USERQuery) IDs(ctx context.Context) (ids []int, err error) {
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (uq *USERQuery) IDsX(ctx context.Context) []int {
+func (uq *USERQuery) IDsX(ctx context.Context) []string {
 	ids, err := uq.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -244,15 +269,27 @@ func (uq *USERQuery) Clone() *USERQuery {
 		return nil
 	}
 	return &USERQuery{
-		config:     uq.config,
-		ctx:        uq.ctx.Clone(),
-		order:      append([]user.OrderOption{}, uq.order...),
-		inters:     append([]Interceptor{}, uq.inters...),
-		predicates: append([]predicate.USER{}, uq.predicates...),
+		config:       uq.config,
+		ctx:          uq.ctx.Clone(),
+		order:        append([]user.OrderOption{}, uq.order...),
+		inters:       append([]Interceptor{}, uq.inters...),
+		predicates:   append([]predicate.USER{}, uq.predicates...),
+		withProducts: uq.withProducts.Clone(),
 		// clone intermediate query.
 		sql:  uq.sql.Clone(),
 		path: uq.path,
 	}
+}
+
+// WithProducts tells the query-builder to eager-load the nodes that are connected to
+// the "products" edge. The optional arguments are used to configure the query builder of the edge.
+func (uq *USERQuery) WithProducts(opts ...func(*TourProductQuery)) *USERQuery {
+	query := (&TourProductClient{config: uq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	uq.withProducts = query
+	return uq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -331,8 +368,11 @@ func (uq *USERQuery) prepareQuery(ctx context.Context) error {
 
 func (uq *USERQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*USER, error) {
 	var (
-		nodes = []*USER{}
-		_spec = uq.querySpec()
+		nodes       = []*USER{}
+		_spec       = uq.querySpec()
+		loadedTypes = [1]bool{
+			uq.withProducts != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*USER).scanValues(nil, columns)
@@ -340,6 +380,7 @@ func (uq *USERQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*USER, e
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &USER{config: uq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -351,7 +392,46 @@ func (uq *USERQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*USER, e
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := uq.withProducts; query != nil {
+		if err := uq.loadProducts(ctx, query, nodes,
+			func(n *USER) { n.Edges.Products = []*TourProduct{} },
+			func(n *USER, e *TourProduct) { n.Edges.Products = append(n.Edges.Products, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (uq *USERQuery) loadProducts(ctx context.Context, query *TourProductQuery, nodes []*USER, init func(*USER), assign func(*USER, *TourProduct)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*USER)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	query.withFKs = true
+	query.Where(predicate.TourProduct(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.ProductsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.user_products
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "user_products" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_products" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (uq *USERQuery) sqlCount(ctx context.Context) (int, error) {
@@ -364,7 +444,7 @@ func (uq *USERQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (uq *USERQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt))
+	_spec := sqlgraph.NewQuerySpec(user.Table, user.Columns, sqlgraph.NewFieldSpec(user.FieldID, field.TypeString))
 	_spec.From = uq.sql
 	if unique := uq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
