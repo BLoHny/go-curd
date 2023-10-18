@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/blohny/error"
+	error "github.com/blohny/helper"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
